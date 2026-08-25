@@ -51,6 +51,14 @@ import { BundlesModule } from './bundles/bundles.module';
 import { SubscriptionsModule } from './subscriptions/subscriptions.module';
 import { LiveSessionsModule } from './live-sessions/live-sessions.module';
 import { PaymentsModule } from './payments/payments.module';
+import { BookmarksModule } from './bookmarks/bookmarks.module';
+import { ProgressSyncModule } from './progress-sync/progress-sync.module';
+import { InstructorAnalyticsModule } from './instructor-analytics/instructor-analytics.module';
+import { CourseFeedbackModule } from './course-feedback/course-feedback.module';
+import { DistributedLockModule } from './common/distributed-lock.module';
+import { DownloadsModule } from './downloads/downloads.module';
+import { QaModule } from './qa/qa.module';
+import { AnnouncementsModule } from './announcements/announcements.module';
 import * as redisStore from 'cache-manager-redis-store';
 import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
 import configuration from './config/configuration';
@@ -165,6 +173,10 @@ import { validationSchema } from './config/validation.schema';
     LiveSessionsModule,
     PaymentsModule,
     ApiVersionModule,
+    BookmarksModule,
+    ProgressSyncModule,
+    InstructorAnalyticsModule,
+    CourseFeedbackModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },
