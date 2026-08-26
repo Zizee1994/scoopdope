@@ -24,6 +24,7 @@ import { KycModule } from './kyc/kyc.module';
 import { LeaderboardModule } from './leaderboard/leaderboard.module';
 import { ForumsModule } from './forums/forums.module';
 import { RecommendationsModule } from './recommendations/recommendations.module';
+import { CollaborationModule } from './collaboration/collaboration.module';
 import { EmailModule } from './email/email.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
@@ -141,6 +142,7 @@ import { validationSchema } from './config/validation.schema';
     MetricsModule,
     KycModule,
     RecommendationsModule,
+    CollaborationModule,
     EmailModule,
     AnalyticsModule,
     WebhooksModule,
