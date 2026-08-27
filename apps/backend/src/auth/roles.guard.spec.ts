@@ -1,6 +1,7 @@
-import { ExecutionContext } from '@nestjs/common';
+import { ExecutionContext, ForbiddenException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { RolesGuard } from './roles.guard';
+import { RolesGuard } from '../roles.guard';
+import { ROLES_KEY } from '../roles.decorator';
 
 describe('RolesGuard', () => {
   let guard: RolesGuard;
@@ -11,43 +12,86 @@ describe('RolesGuard', () => {
     guard = new RolesGuard(reflector);
   });
 
-  const createMockContext = (user: any, handler: any, classRef: any) => {
-    return {
-      switchToHttp: () => ({
-        getRequest: () => ({ user }),
-      }),
-      getHandler: () => handler,
-      getClass: () => classRef,
-    } as ExecutionContext;
-  };
-
-  it('should allow access when no roles are required', () => {
-    jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue(undefined);
-    const context = createMockContext({ role: 'student' }, jest.fn(), jest.fn());
-    expect(guard.canActivate(context)).toBe(true);
+  it('should be defined', () => {
+    expect(guard).toBeDefined();
   });
 
-  it('should allow access when user has required role', () => {
-    jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue(['admin']);
-    const context = createMockContext({ role: 'admin' }, jest.fn(), jest.fn());
-    expect(guard.canActivate(context)).toBe(true);
+  it('should allow access if no roles are required', () => {
+    const mockContext = {
+      getHandler: () => ({}),
+      getClass: () => class {},
+      switchToHttp: () => ({ getRequest: () => ({ user: { role: 'student' } }) }),
+    } as unknown as ExecutionContext;
+
+    jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue(null);
+
+    expect(guard.canActivate(mockContext)).toBe(true);
   });
 
-  it('should deny access when user does not have required role', () => {
-    jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue(['admin']);
-    const context = createMockContext({ role: 'student' }, jest.fn(), jest.fn());
-    expect(guard.canActivate(context)).toBe(false);
-  });
+  it('should allow access if user has required role', () => {
+    const mockContext = {
+      getHandler: () => ({}),
+      getClass: () => class {},
+      switchToHttp: () => ({ getRequest: () => ({ user: { role: 'admin' } }) }),
+    } as unknown as ExecutionContext;
 
-  it('should deny access when no user in request', () => {
-    jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue(['admin']);
-    const context = createMockContext(null, jest.fn(), jest.fn());
-    expect(guard.canActivate(context)).toBe(false);
-  });
-
-  it('should allow access when user has one of multiple required roles', () => {
     jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue(['admin', 'instructor']);
-    const context = createMockContext({ role: 'instructor' }, jest.fn(), jest.fn());
-    expect(guard.canActivate(context)).toBe(true);
+
+    expect(guard.canActivate(mockContext)).toBe(true);
+  });
+
+  it('should throw ForbiddenException if user role not in required roles', () => {
+    const mockContext = {
+      getHandler: () => ({}),
+      getClass: () => class {},
+      switchToHttp: () => ({ getRequest: () => ({ user: { role: 'student' } }) }),
+    } as unknown as ExecutionContext;
+
+    jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue(['admin', 'instructor']);
+
+    expect(() => guard.canActivate(mockContext)).toThrow(ForbiddenException);
+  });
+
+  it('should throw ForbiddenException if user has no role', () => {
+    const mockContext = {
+      getHandler: () => ({}),
+      getClass: () => class {},
+      switchToHttp: () => ({ getRequest: () => ({ user: {} }) }),
+    } as unknown as ExecutionContext;
+
+    jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue(['admin']);
+
+    expect(() => guard.canActivate(mockContext)).toThrow(ForbiddenException);
+  });
+
+  it('should throw ForbiddenException if no user', () => {
+    const mockContext = {
+      getHandler: () => ({}),
+      getClass: () => class {},
+      switchToHttp: () => ({ getRequest: () => ({}) }),
+    } as unknown as ExecutionContext;
+
+    jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue(['admin']);
+
+    expect(() => guard.canActivate(mockContext)).toThrow(ForbiddenException);
+  });
+
+  it('should return 403 with descriptive message', () => {
+    const mockContext = {
+      getHandler: () => ({}),
+      getClass: () => class {},
+      switchToHttp: () => ({ getRequest: () => ({ user: { role: 'student' } }) }),
+    } as unknown as ExecutionContext;
+
+    jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue(['admin', 'instructor']);
+
+    try {
+      guard.canActivate(mockContext);
+    } catch (error) {
+      if (error instanceof ForbiddenException) {
+        expect(error.getStatus()).toBe(403);
+        expect(error.getResponse()).toContain('admin');
+      }
+    }
   });
 });

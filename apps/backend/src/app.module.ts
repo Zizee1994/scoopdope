@@ -51,6 +51,16 @@ import { BundlesModule } from './bundles/bundles.module';
 import { SubscriptionsModule } from './subscriptions/subscriptions.module';
 import { LiveSessionsModule } from './live-sessions/live-sessions.module';
 import { PaymentsModule } from './payments/payments.module';
+import { LessonTrackingModule } from './lesson-tracking/lesson-tracking.module';
+import { NotesModule } from './notes/notes.module';
+import { SurveysModule } from './surveys/surveys.module';
+import { AdaptiveLearningModule } from './adaptive-learning/adaptive-learning.module';
+import { LearningPathsModule } from './learning-paths/learning-paths.module';
+import { CouponsModule } from './coupons/coupons.module';
+import { WaitlistModule } from './waitlist/waitlist.module';
+import { DownloadsModule } from './downloads/downloads.module';
+import { QaModule } from './qa/qa.module';
+import { AnnouncementsModule } from './announcements/announcements.module';
 import * as redisStore from 'cache-manager-redis-store';
 import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
 import configuration from './config/configuration';
@@ -163,6 +173,16 @@ import { validationSchema } from './config/validation.schema';
     SubscriptionsModule,
     LiveSessionsModule,
     PaymentsModule,
+    LessonTrackingModule,
+    NotesModule,
+    SurveysModule,
+    AdaptiveLearningModule,
+    LearningPathsModule,
+    CouponsModule,
+    WaitlistModule,
+    DownloadsModule,
+    QaModule,
+    AnnouncementsModule,
     ApiVersionModule,
   ],
   providers: [
