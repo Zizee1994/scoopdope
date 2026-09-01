@@ -165,11 +165,12 @@ export class UsersService {
       page?: number;
       limit?: number;
       role?: string;
+      status?: UserStatus;
       isVerified?: boolean;
       search?: string;
     } = {}
   ) {
-    const { page = 1, limit = 10, role, isVerified, search } = options;
+    const { page = 1, limit = 10, role, status, isVerified, search } = options;
 
     const query = this.repo.createQueryBuilder('user');
 
@@ -177,12 +178,19 @@ export class UsersService {
       query.andWhere('user.role = :role', { role });
     }
 
+    if (status) {
+      query.andWhere('user.status = :status', { status });
+    }
+
     if (isVerified !== undefined) {
       query.andWhere('user.isVerified = :isVerified', { isVerified });
     }
 
     if (search) {
-      query.andWhere('user.email ILIKE :search', { search: `%${search}%` });
+      query.andWhere(
+        '(user.email ILIKE :search OR user.username ILIKE :search)',
+        { search: `%${search}%` },
+      );
     }
 
     query.andWhere('user.deletedAt IS NULL');
@@ -210,6 +218,18 @@ export class UsersService {
     return this.repo.save({ ...user, isBanned });
   }
 
+  /**
+   * Set a user's status (active / suspended / deactivated).
+   * Returns the old status so callers can record a change delta.
+   */
+  async setStatus(id: string, status: UserStatus): Promise<{ user: User; previousStatus: UserStatus }> {
+    const user = await this.findById(id);
+    if (!user) throw new NotFoundException('User not found');
+    const previousStatus = user.status;
+    const updated = await this.repo.save({ ...user, status });
+    return { user: updated, previousStatus };
+  }
+
   async changeRole(id: string, role: string) {
     if (!Object.values(UserRole).includes(role as UserRole)) {
       throw new BadRequestException(
@@ -218,7 +238,9 @@ export class UsersService {
     }
     const user = await this.findById(id);
     if (!user) throw new NotFoundException('User not found');
-    return this.repo.save({ ...user, role });
+    const previousRole = user.role;
+    const updated = await this.repo.save({ ...user, role });
+    return { user: updated, previousRole };
   }
 
   async softDelete(id: string) {

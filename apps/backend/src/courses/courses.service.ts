@@ -29,6 +29,24 @@ export class CoursesService {
     private readonly metricsService: MetricsService = {} as MetricsService
   ) {}
 
+  /**
+   * Get average rating for a course from reviews
+   */
+  async getAverageRating(courseId: string): Promise<number | null> {
+    const course = await this.repo
+      .createQueryBuilder('course')
+      .leftJoinAndSelect('course.reviews', 'review')
+      .where('course.id = :courseId', { courseId })
+      .getOne();
+
+    if (!course || !course.reviews || course.reviews.length === 0) {
+      return null;
+    }
+
+    const sum = course.reviews.reduce((acc, review) => acc + (review.rating || 0), 0);
+    return parseFloat((sum / course.reviews.length).toFixed(2));
+  }
+
   async findAll(query: CourseQueryDto = {}) {
     const { search, level, category, language, page = 1, limit = 20 } = query;
 

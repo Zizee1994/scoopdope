@@ -17,6 +17,7 @@ export enum CourseStatus {
   DRAFT = 'draft',
   PENDING_REVIEW = 'pending_review',
   SCHEDULED = 'scheduled',
+  PENDING = 'pending',
   PUBLISHED = 'published',
   ARCHIVED = 'archived',
 }

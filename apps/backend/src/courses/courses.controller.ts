@@ -27,6 +27,9 @@ import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { CourseQueryDto } from './dto/course-query.dto';
 import { ScheduleCourseDto } from './dto/schedule-course.dto';
+import { AuditService } from '../audit/audit.service';
+import { AuditAction } from '../audit/audit-log.entity';
+import { CourseStatus } from './course.entity';
 
 @ApiTags('courses')
 @Controller('v1/courses')
@@ -333,4 +336,176 @@ function resolveScheduledAt(isoString: string, timezone?: string): Date {
   );
   const offsetMs = localDate.getTime() - naive.getTime();
   return new Date(naive.getTime() - offsetMs);
+}
+
+/**
+ * Admin-only course management controller.
+ * Handles listing all courses (regardless of status), approval, archive/unarchive, and deletion.
+ */
+@ApiTags('admin')
+@ApiBearerAuth()
+@Controller('admin/courses')
+@UseGuards(JwtAuthGuard, RolesGuard)
+export class AdminCoursesController {
+  constructor(
+    private readonly coursesService: CoursesService,
+    private readonly auditService: AuditService,
+  ) {}
+
+  @Get()
+  @Roles('admin')
+  @ApiOperation({ summary: 'List all courses (admin — all statuses, with filters)' })
+  @ApiResponse({ status: 200, description: 'Paginated list of courses' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden' })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
+  @ApiResponse({ status: 500, description: 'Internal server error' })
+  @ApiQuery({ name: 'status', required: false, enum: CourseStatus })
+  @ApiQuery({ name: 'instructorId', required: false })
+  @ApiQuery({ name: 'search', required: false })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  findAllAdmin(
+    @Query('status') status?: string,
+    @Query('instructorId') instructorId?: string,
+    @Query('search') search?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.coursesService.findAllAdmin({
+      status: status as CourseStatus | undefined,
+      instructorId,
+      search,
+      page: page ? parseInt(page, 10) : 1,
+      limit: limit ? parseInt(limit, 10) : 20,
+    });
+  }
+
+  @Post(':id/approve')
+  @Roles('admin')
+  @ApiOperation({ summary: 'Approve a pending course (publishes it)' })
+  @ApiResponse({ status: 200, description: 'Course approved and published' })
+  @ApiResponse({ status: 404, description: 'Course not found' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden' })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
+  @ApiResponse({ status: 500, description: 'Internal server error' })
+  async approveCourse(
+    @Param('id') id: string,
+    @Req() req: { user: { id: string }; ip: string; headers: Record<string, string> },
+  ) {
+    const course = await this.coursesService.approveCourse(id);
+
+    await this.auditService.log(
+      AuditAction.COURSE_APPROVED,
+      req.user.id,
+      true,
+      {
+        resourceType: 'course',
+        resourceId: id,
+        changes: { status: { from: CourseStatus.PENDING, to: CourseStatus.PUBLISHED } },
+        metadata: { courseTitle: course.title },
+        ipAddress: req.ip,
+        userAgent: req.headers?.['user-agent'],
+      },
+    );
+
+    return course;
+  }
+
+  @Post(':id/archive')
+  @Roles('admin')
+  @ApiOperation({ summary: 'Archive a course' })
+  @ApiResponse({ status: 200, description: 'Course archived' })
+  @ApiResponse({ status: 404, description: 'Course not found' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden' })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
+  @ApiResponse({ status: 500, description: 'Internal server error' })
+  async archiveCourse(
+    @Param('id') id: string,
+    @Req() req: { user: { id: string }; ip: string; headers: Record<string, string> },
+  ) {
+    const { course, previousStatus } = await this.coursesService.archiveCourse(id);
+
+    await this.auditService.log(
+      AuditAction.COURSE_ARCHIVED,
+      req.user.id,
+      true,
+      {
+        resourceType: 'course',
+        resourceId: id,
+        changes: { status: { from: previousStatus, to: CourseStatus.ARCHIVED } },
+        metadata: { courseTitle: course.title },
+        ipAddress: req.ip,
+        userAgent: req.headers?.['user-agent'],
+      },
+    );
+
+    return course;
+  }
+
+  @Post(':id/unarchive')
+  @Roles('admin')
+  @ApiOperation({ summary: 'Unarchive a course (restores to published)' })
+  @ApiResponse({ status: 200, description: 'Course unarchived' })
+  @ApiResponse({ status: 404, description: 'Course not found' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden' })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
+  @ApiResponse({ status: 500, description: 'Internal server error' })
+  async unarchiveCourse(
+    @Param('id') id: string,
+    @Req() req: { user: { id: string }; ip: string; headers: Record<string, string> },
+  ) {
+    const course = await this.coursesService.unarchiveCourse(id);
+
+    await this.auditService.log(
+      AuditAction.COURSE_UNARCHIVED,
+      req.user.id,
+      true,
+      {
+        resourceType: 'course',
+        resourceId: id,
+        changes: { status: { from: CourseStatus.ARCHIVED, to: CourseStatus.PUBLISHED } },
+        metadata: { courseTitle: course.title },
+        ipAddress: req.ip,
+        userAgent: req.headers?.['user-agent'],
+      },
+    );
+
+    return course;
+  }
+
+  @Delete(':id')
+  @Roles('admin')
+  @ApiOperation({ summary: 'Permanently delete a course (admin only)' })
+  @ApiResponse({ status: 200, description: 'Course deleted' })
+  @ApiResponse({ status: 404, description: 'Course not found' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden' })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
+  @ApiResponse({ status: 500, description: 'Internal server error' })
+  async deleteCourse(
+    @Param('id') id: string,
+    @Req() req: { user: { id: string }; ip: string; headers: Record<string, string> },
+  ) {
+    const course = await this.coursesService.findOneAdmin(id);
+    const result = await this.coursesService.delete(id);
+
+    await this.auditService.log(
+      AuditAction.COURSE_DELETED,
+      req.user.id,
+      true,
+      {
+        resourceType: 'course',
+        resourceId: id,
+        metadata: { courseTitle: course.title },
+        ipAddress: req.ip,
+        userAgent: req.headers?.['user-agent'],
+      },
+    );
+
+    return result;
+  }
 }

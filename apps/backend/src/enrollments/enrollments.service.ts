@@ -59,6 +59,27 @@ export class EnrollmentsService {
       }),
     );
 
+    return enrollment;
+  }
+
+  /**
+   * Count total enrollments for a course
+   */
+  async countByCoursId(courseId: string): Promise<number> {
+    return this.repo.count({ where: { courseId } });
+  }
+
+  /**
+   * Count completed enrollments for a course
+   */
+  async countCompletedByCourseId(courseId: string): Promise<number> {
+    return this.repo
+      .createQueryBuilder('enrollment')
+      .where('enrollment.courseId = :courseId', { courseId })
+      .andWhere('enrollment.completedAt IS NOT NULL')
+      .getCount();
+  }
+
     // Record the enrollment on-chain. If the Soroban call fails we roll back
     // the enrollment row so the database never holds an un-anchored record.
     let transactionHash: string | null = null;

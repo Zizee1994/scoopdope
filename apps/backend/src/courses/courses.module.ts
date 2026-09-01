@@ -9,6 +9,7 @@ import { ModulesService } from './modules.service';
 import { LessonsService } from './lessons.service';
 import { CategoriesService } from './categories.service';
 import { CoursesController } from './courses.controller';
+import { AdminCoursesController } from './admin-courses.controller';
 import { ModulesController } from './modules.controller';
 import { CategoriesController } from './categories.controller';
 import { Review } from './review.entity';
