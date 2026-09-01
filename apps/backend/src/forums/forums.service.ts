@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Course } from '../courses/course.entity';
@@ -11,6 +11,7 @@ import { ModerationService } from '../moderation/moderation.service';
 import { ContentType } from '../moderation/moderation.enums';
 import { SearchService } from '../search/search.service';
 import { StreaksService } from '../streaks/streaks.service';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 
 @Injectable()
 export class ForumsService {
@@ -25,7 +26,8 @@ export class ForumsService {
     private readonly voteRepo: Repository<ForumVote>,
     private readonly moderationService: ModerationService,
     private readonly searchService: SearchService,
-    private readonly streaksService: StreaksService
+    private readonly streaksService: StreaksService,
+    @Optional() private readonly eventEmitter?: EventEmitter2
   ) {}
 
   async findPostsByCourse(courseId: string) {
@@ -119,6 +121,9 @@ export class ForumsService {
     });
 
     const savedReply = await this.replyRepo.save(reply);
+    if (post.userId !== userId) {
+      this.eventEmitter?.emit('peer.helped', { userId });
+    }
 
     if (savedReply.isAnswer) {
       post.answerReplyId = savedReply.id;
