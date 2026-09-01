@@ -45,6 +45,7 @@ import { InstructorAssignmentController } from './instructor-assignment.controll
     SearchModule,
     NotificationsModule,
     MetricsModule,
+    AnnouncementsModule,
   ],
   providers: [
     CoursesService,
