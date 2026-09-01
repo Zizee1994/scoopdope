@@ -92,7 +92,11 @@ export function CourseCard({ course, observerRef }: { course: Course; observerRe
             </span>
           )}
           <div className="flex items-center gap-2 ml-auto">
-            <Link href={`/courses/${course.id}`} className="text-sm text-blue-600 dark:text-blue-400 hover:underline">
+            <Link
+              href={`/courses/${course.id}`}
+              aria-label={`View ${course.title}`}
+              className="text-sm text-blue-600 dark:text-blue-400 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
+            >
               View →
             </Link>
             <Link
