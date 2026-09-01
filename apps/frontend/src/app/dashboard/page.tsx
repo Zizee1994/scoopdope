@@ -27,6 +27,7 @@ import { BalanceWidget } from '@/components/dashboard/BalanceWidget';
 import { CheckCircle2 } from 'lucide-react';
 import OnboardingWizard from '@/components/onboarding/OnboardingWizard';
 import { useOnboardingStore } from '@/store/onboarding.store';
+import BadgeDisplay, { type BadgeProgress } from '@/components/profile/BadgeDisplay';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -79,6 +80,7 @@ export default function DashboardPage() {
   const [bundleEnrollments, setBundleEnrollments] = useState<any[]>([]);
   const [pathEnrollments, setPathEnrollments] = useState<any[]>([]);
   const [recommendations, setRecommendations] = useState<any[]>([]);
+  const [badges, setBadges] = useState<BadgeProgress[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -121,6 +123,7 @@ export default function DashboardPage() {
         setBundleEnrollments(bundlesRes.data ?? []);
         setPathEnrollments(pathsRes.data ?? []);
         setRecommendations(recsRes.data?.data ?? []);
+        setBadges(badgesRes.data ?? []);
 
         const progressRecords: ProgressRecord[] = (progressRes.data ?? []).map(
           (p: any) => ({
