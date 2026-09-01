@@ -71,6 +71,13 @@ export class CoursesService {
       qb.andWhere('course.language = :language', { language });
     }
 
+    if (categoryId) {
+      qb.andWhere('course.categoryId = :categoryId', { categoryId });
+    } else if (category) {
+      // Filter by slug when a full UUID is not provided
+      qb.andWhere('category.slug = :categorySlug', { categorySlug: category });
+    }
+
     const total = await qb.clone().getCount();
     const offset = (page - 1) * limit;
 
@@ -81,6 +88,7 @@ export class CoursesService {
       .take(limit)
       .orderBy('course.createdAt', 'DESC')
       .groupBy('course.id')
+      .addGroupBy('category.id')
       .getRawAndEntities();
 
     const averageRatings = new Map(

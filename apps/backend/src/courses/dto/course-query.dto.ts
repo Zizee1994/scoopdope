@@ -1,4 +1,4 @@
-import { IsOptional, IsString, IsIn } from 'class-validator';
+import { IsOptional, IsString, IsIn, IsUUID } from 'class-validator';
 import { Trim, Sanitize } from 'class-sanitizer';
 import { StripHtmlSanitizer } from '../../common/sanitizers/strip-html.sanitizer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
@@ -43,4 +43,16 @@ export class CourseQueryDto extends PaginationDto {
   @Sanitize(StripHtmlSanitizer)
   language?: string;
 
+  @ApiPropertyOptional({ description: 'Filter by category ID (UUID)' })
+  @IsOptional()
+  @IsUUID()
+  categoryId?: string;
+
+  @ApiPropertyOptional({ description: 'Filter by category slug (e.g. "blockchain")' })
+  @IsOptional()
+  @IsString()
+  @Trim()
+  @Sanitize(StripHtmlSanitizer)
+  category?: string;
 }
+

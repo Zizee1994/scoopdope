@@ -64,6 +64,16 @@ export class CoursesController {
     description: 'Filter by BCP-47 language code (e.g. "en", "es", "fr", "ar")',
   })
   @ApiQuery({
+    name: 'categoryId',
+    required: false,
+    description: 'Filter by category UUID',
+  })
+  @ApiQuery({
+    name: 'category',
+    required: false,
+    description: 'Filter by category slug (e.g. "blockchain")',
+  })
+  @ApiQuery({
     name: 'page',
     required: false,
     type: Number,

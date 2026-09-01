@@ -12,6 +12,7 @@ import { IsEmail, IsString, MinLength, IsOptional, Matches } from 'class-validat
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { Roles } from './roles.decorator';
 import { RolesGuard } from './roles.guard';
+import { UserDeactivationService } from '../user-deactivation/user-deactivation.service';
 
 class RegisterDto {
   @ApiProperty({
@@ -93,6 +94,7 @@ export class AuthController {
     private authService: AuthService,
     private stellarAuthService: StellarAuthService,
     private configService: ConfigService,
+    private userDeactivationService: UserDeactivationService,
   ) {}
 
   @Get('google')
@@ -427,5 +429,37 @@ export class AuthController {
     @Body('challenge') challenge: string
   ) {
     return this.authService.verifyStellarSignature(req.user.id, publicKey, signature, challenge);
+  }
+
+  /**
+   * POST /v1/auth/reactivate
+   *
+   * #872 – Account Reactivation
+   * No authentication required. Accepts a single-use token sent via email
+   * and re-enables the deactivated account.
+   *
+   * Rate-limited to 10 attempts / hour to prevent brute-force attacks.
+   */
+  @Post('reactivate')
+  @Throttle({ default: { limit: 10, ttl: 3600000 } })
+  @ApiOperation({ summary: 'Reactivate a deactivated account via email token' })
+  @ApiBody({ schema: { example: { token: 'hex-token-from-email' } } })
+  @ApiResponse({ status: 200, description: 'Account reactivated successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid or expired reactivation token' })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
+  async reactivate(@Body('token') token: string) {
+    if (!token) {
+      return { success: false, message: 'Reactivation token is required' };
+    }
+    try {
+      const user = await this.userDeactivationService.reactivate(token);
+      return {
+        success: true,
+        message: 'Your account has been reactivated. You can now log in.',
+        userId: user.id,
+      };
+    } catch (err: any) {
+      return { success: false, message: err?.message ?? 'Reactivation failed' };
+    }
   }
 }
