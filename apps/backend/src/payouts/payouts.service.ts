@@ -61,11 +61,13 @@ export class PayoutsService {
             take: batchSize,
           });
         } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          const stack = error instanceof Error ? error.stack : undefined;
           this.logger.error(
-            `Payout batch fetch failed for course ${course.id} at offset ${offset}: ${error.message}`,
-            error.stack,
+            `Payout batch fetch failed for course ${course.id} at offset ${offset}: ${message}`,
+            stack,
           );
-          failedBatches.push({ cursor: offset, error: error.message });
+          failedBatches.push({ cursor: offset, error: message });
           offset += batchSize;
           continue;
         }
@@ -85,13 +87,28 @@ export class PayoutsService {
       if (totalCompletions === 0) continue;
 
       const totalRevenue = totalCompletions * coursePrice;
-      const platformFee = (totalRevenue * platformFeePercent) / 100;
-      const instructorShare = totalRevenue - platformFee;
+      
+      // Stripe fees: 2.9% + $0.30 per transaction
+      // For simplicity, we'll use 2.9% + $0.30 per completion
+      // In production, this would come from Stripe's PaymentIntent.application_fee_amount
+      const stripeFeePercentage = totalRevenue * 0.029;
+      const stripeFeeFixedPerCompletion = 0.30;
+      const totalStripeFee = stripeFeePercentage + (stripeFeeFixedPerCompletion * totalCompletions);
+      
+      // Net revenue = gross - Stripe fees
+      const netRevenue = totalRevenue - totalStripeFee;
+      
+      // Platform fee taken from net revenue
+      const platformFee = (netRevenue * platformFeePercent) / 100;
+      
+      // Instructor share = net revenue - platform fee
+      const instructorShare = netRevenue - platformFee;
 
       const payout = this.payoutsRepository.create({
         instructorId,
         courseId: course.id,
         totalRevenue,
+        stripeFee: totalStripeFee,
         platformFee,
         instructorShare,
         status: 'pending',
@@ -139,7 +156,8 @@ export class PayoutsService {
       this.logger.log(`Payout processed for instructor ${payout.instructor.email}: $${payout.instructorShare}`);
     } catch (error) {
       payout.status = 'failed';
-      this.logger.error(`Payout failed: ${error.message}`);
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(`Payout failed: ${message}`);
     }
 
     return this.payoutsRepository.save(payout);

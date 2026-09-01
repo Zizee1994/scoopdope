@@ -4,13 +4,15 @@ import {
   ForbiddenException,
   BadRequestException,
   NotFoundException,
+  ConflictException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, DataSource } from 'typeorm';
 import * as bcryptLib from 'bcrypt';
 import { UsersService } from '../users/users.service';
 import { MailService } from '../mail/mail.service';
 import { PasswordResetToken } from './password-reset-token.entity';
+import { User } from '../users/user.entity';
 import { AuditService } from '../audit/audit.service';
 import { AuditAction } from '../audit/audit-log.entity';
 import { TokenService } from './token.service';
@@ -29,11 +31,12 @@ export class AuthService {
     private oauthService: OAuthService,
     @InjectRepository(PasswordResetToken)
     private resetTokenRepo: Repository<PasswordResetToken>,
+    private dataSource: DataSource,
   ) {}
 
   async register(email: string, password: string, refCode?: string) {
     const existing = await this.usersService.findByEmail(email);
-    if (existing) throw new BadRequestException('Email already in use');
+    if (existing) throw new ConflictException('Email already in use');
 
     const passwordHash = await bcryptLib.hash(password, 10);
     const { token, hash, expiresAt } = this.tokenService.generateOpaqueToken(24);
@@ -57,11 +60,18 @@ export class AuthService {
 
     await this.mailService.sendVerificationEmail(user.email, token);
     await this.auditService.log(AuditAction.REGISTER, user.id, true, { email });
-    return { message: 'Registration successful. Please verify your email.' };
+
+    const tokens = await this.tokenService.issueTokenPair(user.id, user.email, user.role);
+    return {
+      userId: user.id,
+      access_token: tokens.access_token,
+      refresh_token: tokens.refresh_token,
+      message: 'Registration successful. Please verify your email.',
+    };
   }
 
   async login(email: string, password: string, mfaToken?: string, ipAddress?: string, userAgent?: string) {
-    const user = await this.usersService.findByEmail(email);
+    const user = await this.usersService.findByEmailWithPassword(email);
     if (!user || !(await bcryptLib.compare(password, user.passwordHash))) {
       await this.auditService.log(AuditAction.LOGIN_FAILURE, null, false, { email }, ipAddress, userAgent);
       throw new UnauthorizedException('Invalid credentials');
@@ -91,9 +101,21 @@ export class AuthService {
       }
     }
 
-    const result = await this.tokenService.issueTokenPair(user.id, user.email, user.role);
+    const tokens = await this.tokenService.issueTokenPair(user.id, user.email, user.role);
     await this.auditService.log(AuditAction.LOGIN_SUCCESS, user.id, true, {}, ipAddress, userAgent);
-    return result;
+    return {
+      access_token: tokens.access_token,
+      refresh_token: tokens.refresh_token,
+      user: {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        isVerified: user.isVerified,
+        avatar: user.avatar ?? null,
+        username: user.username ?? null,
+        createdAt: user.createdAt,
+      },
+    };
   }
 
   async refresh(rawRefreshToken: string) {
@@ -163,15 +185,34 @@ export class AuthService {
 
   async resetPassword(token: string, newPassword: string) {
     const hash = this.tokenService.hashToken(token);
-    const resetToken = await this.resetTokenRepo.findOne({ where: { tokenHash: hash, used: false } });
 
-    if (!resetToken) throw new BadRequestException('Invalid or expired reset token');
-    if (resetToken.expiresAt < new Date()) throw new BadRequestException('Reset token has expired');
+    // Wrap token validation, password update, and token deletion in a single
+    // transaction so that concurrent use of the same token is detected.
+    const userId = await this.dataSource.transaction(async (manager) => {
+      const resetTokenRepo = manager.getRepository(PasswordResetToken);
+      const userRepo = manager.getRepository(User);
 
-    const passwordHash = await bcryptLib.hash(newPassword, 10);
-    await this.usersService.update(resetToken.userId, { passwordHash });
-    await this.resetTokenRepo.save({ ...resetToken, used: true });
-    await this.auditService.log(AuditAction.PASSWORD_RESET_COMPLETE, resetToken.userId, true);
+      const resetToken = await resetTokenRepo.findOne({
+        where: { tokenHash: hash, used: false },
+      });
+
+      if (!resetToken) throw new BadRequestException('Invalid or expired reset token');
+      if (resetToken.expiresAt < new Date()) throw new BadRequestException('Reset token has expired');
+
+      const passwordHash = await bcryptLib.hash(newPassword, 10);
+      await userRepo.update(resetToken.userId, { passwordHash });
+
+      // Delete the token row immediately after use. If another request already
+      // consumed it, affected will be 0 and we reject the second attempt.
+      const deleteResult = await resetTokenRepo.delete({ id: resetToken.id });
+      if (deleteResult.affected === 0) {
+        throw new BadRequestException('This reset token has already been used');
+      }
+
+      return resetToken.userId;
+    });
+
+    await this.auditService.log(AuditAction.PASSWORD_RESET_COMPLETE, userId, true);
     return { message: 'Password reset successfully. You can now log in.' };
   }
 
